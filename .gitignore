@@ -1,0 +1,9 @@
+/target/
+/gen/
+/downloads/
+/.env
+/.env.*
+*.part
+*.log
+.DS_Store
+Thumbs.db

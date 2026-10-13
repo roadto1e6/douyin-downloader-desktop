@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>抖音下载工具</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<svg class="svg-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="m10 14 4-4m-6 6-1 1a4.2 4.2 0 0 1-6-6l5-5a4.2 4.2 0 0 1 6 0m0 12a4.2 4.2 0 0 0 6 0l5-5a4.2 4.2 0 0 0-6-6l-1 1" transform="translate(1 0) scale(.9 1)"/></symbol>
+<symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3Z"/></symbol>
+<symbol id="i-audio" viewBox="0 0 24 24"><path d="M5 9v6m4-10v14m4-11v8m4-12v16m4-10v4"/></symbol>
+<symbol id="i-both" viewBox="0 0 24 24"><rect x="7" y="7" width="14" height="14" rx="3"/><path d="M16 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2m5-5 5 3-5 3Z"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/><path d="M3 9h18"/></symbol>
+<symbol id="i-paste" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="4" rx="1.5"/><path d="M7 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M8 12h8m-8 4h5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+<symbol id="i-open" viewBox="0 0 24 24"><path d="M14 4h6v6m0-6L10 14M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></symbol>
+<symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="m8 11 3 3 5-5"/></symbol>
+</defs></svg>
+<div class="app-shell">
+<header class="app-header"><div class="brand"><span class="brand-icon"><svg><use href="#i-arrow"/></svg></span><div><span class="brand-name">抖音下载</span><span class="brand-note">收好每一个喜欢</span></div></div><span class="header-note"><span class="dot"></span>你的收藏，留在本地</span></header>
+<main>
+<section class="workspace" aria-labelledby="heading"><div class="intro"><span class="eyebrow">SAVE A LITTLE MOMENT</span><h1 id="heading">把喜欢的，留在本地。</h1><p>一条链接，保存画面，也留住声音。</p></div>
+<form id="form" novalidate>
+<div class="field-header"><label for="link"><span class="field-number">01</span>作品链接</label><button id="clear" class="quiet-button" type="button" title="清空链接" hidden>清空</button></div>
+<div class="input-wrap"><svg class="input-icon"><use href="#i-link"/></svg><textarea id="link" maxlength="16384" spellcheck="false" placeholder="粘贴抖音链接，或整段分享文字…" aria-describedby="input-note"></textarea><button id="paste" class="paste-button" type="button"><svg><use href="#i-paste"/></svg>粘贴</button></div>
+<p id="input-note" class="input-note" aria-live="polite">支持短链接与视频作品链接</p>
+<fieldset><legend><span class="field-number">02</span>保存什么</legend><div class="modes">
+<label class="mode"><input type="radio" name="mode" value="both" checked><span class="selection"><svg><use href="#i-check"/></svg></span><svg class="mode-icon"><use href="#i-both"/></svg><strong>视频与音频</strong><span class="mode-format">MP4 + MP3</span></label>
+<label class="mode"><input type="radio" name="mode" value="video"><span class="selection"><svg><use href="#i-check"/></svg></span><svg class="mode-icon"><use href="#i-video"/></svg><strong>仅视频</strong><span class="mode-format">MP4</span></label>
+<label class="mode"><input type="radio" name="mode" value="audio"><span class="selection"><svg><use href="#i-check"/></svg></span><svg class="mode-icon"><use href="#i-audio"/></svg><strong>仅音频</strong><span class="mode-format">MP3</span></label>
+</div></fieldset>
+<div class="destination"><svg><use href="#i-folder"/></svg><div class="folder-info"><span>保存位置</span><p id="folder" title="">正在读取…</p></div><button id="choose" type="button" class="quiet-button">更改<svg><use href="#i-chevron"/></svg></button></div>
+<div class="actions"><button class="primary" id="start" type="submit"><svg class="download-icon"><use href="#i-arrow"/></svg><span id="start-text">下载视频与音频</span><span class="button-spinner" hidden></span></button><span class="shortcut"><kbd>Ctrl</kbd><span>+</span><kbd>Enter</kbd></span></div>
+<p class="form-footnote">保留原视频时长 · 不覆盖已有文件</p>
+</form></section>
+<aside class="transfer" data-state="idle" aria-labelledby="panel-title">
+<div class="panel-header"><span id="panel-title">本次下载</span><span class="state-badge" id="state-badge"><span></span><b id="label">准备就绪</b></span></div>
+<div class="transfer-visual" aria-hidden="true"><svg class="media-art" viewBox="0 0 320 180" fill="none"><ellipse class="art-orbit" cx="160" cy="105" rx="121" ry="55"/><path class="art-dash" d="M35 78h30m-15-15v30m207 27h21m-10-10v20"/><g class="art-sheet"><rect x="81" y="32" width="116" height="132" rx="12"/><rect class="art-inner" x="94" y="45" width="90" height="64" rx="6"/><path class="art-play" d="m130 62 25 15-25 15Z"/><path class="art-lines" d="M96 127h70m-70 12h45"/></g><g class="art-disc"><circle cx="211" cy="113" r="44"/><circle class="art-ring" cx="211" cy="113" r="33"/><circle class="art-ring" cx="211" cy="113" r="24"/><circle class="art-center" cx="211" cy="113" r="9"/></g><g class="art-check"><circle cx="251" cy="56" r="19"/><path d="m242 56 6 6 12-13"/></g></svg><div class="sound-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+<div class="summary"><h2 id="status-title">等待一个好片段</h2><p id="message">在左侧粘贴链接，<br>其余的，交给我们。</p></div>
+<div class="progress-area" hidden><div class="progress-meta"><span id="stage-name">正在准备</span><span id="percent">0%</span></div><progress id="progress" value="0" max="100" aria-label="下载进度"></progress><ol class="stages"><li data-step="0"><span></span>解析链接</li><li data-step="1"><span></span>下载视频</li><li data-step="2"><span></span>处理文件</li></ol></div>
+<ul id="files" class="file-list" aria-label="下载结果"></ul>
+<details id="error-details" hidden><summary>查看详细原因</summary><p id="error-message"></p></details>
+<div class="panel-bottom"><div id="privacy-note"><svg><use href="#i-shield"/></svg><span>文件仅保存到你的电脑</span></div><button id="cancel" class="cancel-button" type="button" hidden><svg><use href="#i-close"/></svg>取消任务</button><button id="open" class="open-button" type="button" hidden>打开保存文件夹<svg><use href="#i-open"/></svg></button><span id="elapsed" hidden>00:00</span></div>
+</aside>
+</main>
+<footer><span>支持公开可播放的抖音视频</span><span class="footer-right">MADE FOR YOUR COLLECTION<span class="footer-divider"></span>v1.1</span></footer>
+</div><div class="toast" id="toast" role="status" hidden></div><script src="app.js"></script>
+</body></html>
