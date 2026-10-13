@@ -1,138 +1,24 @@
 'use strict';
-const $ = selector => document.querySelector(selector);
-const invoke = (command, args) => window.__TAURI__.core.invoke(command, args);
-let running = false, submitting = false, polling = false, cancelling = false;
-let lastFiles = '', lastStatus = '', startedAt = 0, toastTimer;
-const modeNames = { both: '下载视频与音频', video: '下载视频', audio: '下载音频' };
-
-function icon(id) {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-  use.setAttribute('href', '#' + id); svg.append(use); return svg;
-}
-function toast(message) {
-  clearTimeout(toastTimer); $('#toast').textContent = String(message); $('#toast').hidden = false;
-  toastTimer = setTimeout(() => { $('#toast').hidden = true; }, 4500);
-}
-function validLink(text) {
-  const matches = text.match(/https:\/\/[^\s<>"\u3000]+/g) || [];
-  return matches.some(raw => {
-    try {
-      const url = new URL(raw.replace(/[，。；！）】,;!)\]]+$/, ''));
-      return ['v.douyin.com', 'www.douyin.com', 'douyin.com', 'www.iesdouyin.com', 'iesdouyin.com'].includes(url.hostname)
-        && !url.username && !url.password && (!url.port || url.port === '443');
-    } catch { return false; }
-  });
-}
-function note(message, type = '') {
-  $('#input-note').textContent = message; $('#input-note').className = 'input-note ' + type;
-  $('.input-wrap').classList.toggle('invalid', type === 'invalid');
-  $('#link').setAttribute('aria-invalid', String(type === 'invalid'));
-}
-function inputChanged() {
-  const text = $('#link').value.trim(); $('#clear').hidden = !text;
-  if (!text) note('支持短链接与视频作品链接');
-  else if (validLink(text)) note('已识别抖音链接，可以开始保存', 'valid');
-  else note('支持直接粘贴整段分享文字');
-}
-function controls() {
-  const busy = running || submitting;
-  $('#start').disabled = busy; $('#paste').disabled = busy; $('#choose').disabled = busy;
-  $('#clear').disabled = busy; $('#link').disabled = busy;
-  document.querySelectorAll('input[name=mode]').forEach(input => { input.disabled = busy; });
-  $('#start-text').textContent = cancelling ? '正在取消…' : busy ? '正在保存…' : modeNames[$('input[name=mode]:checked').value];
-  $('.button-spinner').hidden = !busy; $('.download-icon').hidden = busy;
-  $('#cancel').disabled = cancelling; $('.shortcut').hidden = busy;
-}
-function renderFiles(files) {
-  const key = JSON.stringify(files); if (key === lastFiles) return; lastFiles = key;
-  $('#files').replaceChildren(...files.map((path, index) => {
-    const name = path.split(/[\\/]/).pop(), audio = /\.mp3$/i.test(name);
-    const li = document.createElement('li'), badge = document.createElement('span');
-    badge.className = 'file-icon'; badge.append(icon(audio ? 'i-audio' : 'i-video'));
-    const info = document.createElement('span'); info.className = 'file-info';
-    const label = document.createElement('span'); label.className = 'file-name'; label.textContent = name; label.title = name;
-    const type = document.createElement('span'); type.className = 'file-type'; type.textContent = audio ? 'MP3 · 音频' : 'MP4 · 视频';
-    info.append(label, type);
-    const open = document.createElement('button'); open.className = 'file-open'; open.type = 'button';
-    open.title = '打开' + (audio ? '音频' : '视频'); open.setAttribute('aria-label', '打开文件：' + name); open.append(icon('i-open'));
-    open.addEventListener('click', async () => { try { await invoke('open_file', { index }); } catch (error) { toast(error); } });
-    li.append(badge, info, open); return li;
-  }));
-}
-function render(state) {
-  running = state.status === 'running';
-  if (running && !startedAt) startedAt = Date.now();
-  if (!running) { startedAt = 0; cancelling = false; }
-  $('.transfer').dataset.state = state.status;
-  $('#folder').textContent = state.output; $('#folder').title = state.output;
-  const labels = { idle: '准备就绪', running: '正在处理', done: '已完成', error: '下载失败', cancelled: '已取消' };
-  $('#label').textContent = cancelling ? '正在取消' : labels[state.status] || '准备就绪';
-  const titles = { idle: '等待一个好片段', running: '正在为你收好', done: '喜欢的，已经留下。', error: '这次没能下载', cancelled: '任务已取消' };
-  $('#status-title').textContent = cancelling ? '正在收尾清理' : titles[state.status] || titles.idle;
-  const messages = {
-    idle: '在左侧粘贴链接，其余的交给我们。',
-    done: '已保存 ' + state.files.length + ' 个文件，随时打开重温。',
-    error: '请检查链接能否公开播放，或稍后重试。',
-    cancelled: '临时文件已清理，可以重新开始。'
-  };
-  $('#message').textContent = cancelling ? '等待当前操作结束后，将清理临时文件。' : running ? state.message : messages[state.status] || state.message;
-  $('#progress').value = state.progress; $('#percent').textContent = state.progress + '%';
-  $('.progress-area').hidden = !running;
-  const step = state.progress < 30 ? 0 : state.progress < 78 ? 1 : 2;
-  $('#stage-name').textContent = ['正在解析作品', '正在下载视频', '正在处理文件'][step];
-  document.querySelectorAll('.stages li').forEach((li, index) => {
-    li.classList.toggle('active', index === step); li.classList.toggle('complete', index < step);
-    if (index === step) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
-  });
-  renderFiles(state.files);
-  $('#error-details').hidden = state.status !== 'error';
-  if (lastStatus !== state.status) $('#error-details').open = false;
-  $('#error-message').textContent = state.status === 'error' ? state.message : '';
-  $('#privacy-note').hidden = running || state.status === 'done';
-  $('#open').hidden = state.status !== 'done'; $('#cancel').hidden = !running; $('#elapsed').hidden = !running;
-  lastStatus = state.status; controls();
-}
-async function refresh() {
-  if (polling) return; polling = true;
-  try { render(await invoke('get_state')); } catch (error) { toast('无法读取任务状态，请重启工具。'); }
-  finally { polling = false; }
-}
-async function cancel() {
-  if (!running || cancelling) return;
-  cancelling = true; controls();
-  try { await invoke('cancel_download'); await refresh(); } catch (error) { cancelling = false; controls(); toast(error); }
-}
-$('#form').addEventListener('submit', async event => {
-  event.preventDefault(); if (running || submitting) return;
-  const link = $('#link').value.trim();
-  if (!link || !validLink(link)) { note(link ? '没有找到有效的抖音链接，请检查后重试' : '请先粘贴一个抖音链接', 'invalid'); $('#link').focus(); return; }
-  submitting = true; controls();
-  try {
-    await invoke('start_download', { link, mode: $('input[name=mode]:checked').value });
-    running = true; startedAt = Date.now(); await refresh();
-  } catch (error) { note(String(error), 'invalid'); }
-  finally { submitting = false; controls(); }
-});
-$('#link').addEventListener('input', inputChanged);
-document.querySelectorAll('input[name=mode]').forEach(input => input.addEventListener('change', controls));
-$('#clear').addEventListener('click', () => { $('#link').value = ''; inputChanged(); $('#link').focus(); });
-$('#paste').addEventListener('click', async () => {
-  try {
-    const text = await invoke('read_clipboard');
-    if (!text.trim()) { toast('剪贴板里还没有文字，先复制一条分享链接吧。'); return; }
-    $('#link').value = text.slice(0, 16384); inputChanged(); $('#link').focus();
-  } catch (error) { toast(error); }
-});
-$('#choose').addEventListener('click', async () => { try { await invoke('choose_folder'); await refresh(); } catch (error) { toast(error); } });
-$('#cancel').addEventListener('click', cancel);
-$('#open').addEventListener('click', async () => { try { await invoke('open_folder'); } catch (error) { toast(error); } });
-document.addEventListener('keydown', event => {
-  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); if (!running && !submitting) $('#form').requestSubmit(); }
-  if (event.key === 'Escape' && running) { event.preventDefault(); cancel(); }
-});
-refresh();
-setInterval(() => {
-  if (running || submitting) refresh();
-  if (startedAt) { const seconds = Math.floor((Date.now() - startedAt) / 1000); $('#elapsed').textContent = String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0'); }
-}, 500);
+const $=s=>document.querySelector(s),invoke=(name,args)=>window.__TAURI__.core.invoke(name,args);
+let snapshot={tasks:[],paused:false,output:'',mode:'both',warning:''},view='queue',submitting=false,polling=false,first=true,previewSeq=0,previewTimer,toastTimer,hadPending=false;
+const rows=new Map(),labels={queued:'等待中',running:'下载中',done:'已完成',skipped:'已跳过',error:'失败',cancelled:'已取消'},modeNames={both:'视频 + 音频',video:'视频',audio:'音频'};
+function toast(text){clearTimeout(toastTimer);$('#toast').textContent=String(text);$('#toast').hidden=false;toastTimer=setTimeout(()=>$('#toast').hidden=true,5500)}
+function note(text,kind=''){$('#input-note').textContent=text;$('#input-note').title=text;$('#input-note').className='input-note '+kind;$('.input-wrap').classList.toggle('invalid',kind==='invalid');$('#link').setAttribute('aria-invalid',String(kind==='invalid'))}
+async function preview(){const seq=++previewSeq,text=$('#link').value.trim();$('#clear').hidden=!text;if(!text){note('支持多条链接 · 每批最多 100 条');$('#start-text').textContent='加入下载队列';return}try{const p=await invoke('preview_batch',{text});if(seq!==previewSeq)return;note(p.links.length?`识别到 ${p.links.length} 条链接${p.duplicates?' · '+p.duplicates+' 条重复':''}${p.ignored?' · '+p.ignored+' 条不支持':''}`:'没有识别到抖音链接',p.links.length?'valid':'invalid');$('#start-text').textContent=p.links.length?`加入队列 · ${p.links.length} 条`:'加入下载队列'}catch(e){if(seq===previewSeq)note(e,'invalid')}}
+function inputChanged(){clearTimeout(previewTimer);previewTimer=setTimeout(preview,180)}
+async function action(command,args,success){try{const result=await invoke(command,args);if(success)toast(typeof success==='function'?success(result):success);await refresh();return result}catch(e){toast(e)}}
+function button(text,handler){const b=document.createElement('button');b.type='button';b.textContent=text;b.addEventListener('click',handler);return b}
+function makeRow(task){const row=document.createElement('article');row.className='task-row';row.setAttribute('role','listitem');row.innerHTML='<div class="task-top"><strong class="task-title"></strong><span class="task-status"></span></div><p class="task-meta"></p><p class="task-message"></p><progress class="task-progress" max="100" aria-label="任务进度"></progress><details class="task-error" hidden><summary>查看失败原因</summary><p></p></details><div class="task-actions"></div>';row.dataset.id=task.id;return row}
+function updateRow(row,t){row.dataset.status=t.status;const title=t.title||t.link.replace('https://','');row.querySelector('.task-title').textContent=title;row.querySelector('.task-title').title=title;row.querySelector('.task-status').textContent=labels[t.status];row.querySelector('.task-meta').textContent=`${modeNames[t.mode]} · ${new Date(t.created_at*1000).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}${t.attempts>1?' · 第 '+t.attempts+' 次尝试':''}`;row.querySelector('.task-meta').title=t.output;const message=row.querySelector('.task-message');message.textContent=t.message;message.title=t.message;message.hidden=t.status==='error';const progress=row.querySelector('progress');progress.value=t.progress;progress.hidden=t.status!=='running';row.querySelector('.task-error').hidden=t.status!=='error';row.querySelector('.task-error p').textContent=t.status==='error'?t.message:'';
+ const key=JSON.stringify([t.status,t.files]);if(row.dataset.actions!==key){row.dataset.actions=key;const a=row.querySelector('.task-actions');a.replaceChildren();if(['queued','running'].includes(t.status))a.append(button('取消',()=>action('cancel_task',{id:t.id})));if(['error','cancelled'].includes(t.status))a.append(button('重试',()=>action('retry_tasks',{id:t.id},n=>n?'已重新加入队列':'没有可重试任务')));t.files.forEach((file,index)=>a.append(button(file.toLowerCase().endsWith('.mp3')?'打开音频 ↗':'打开视频 ↗',()=>action('open_file',{id:t.id,index}))));if(t.files.length)a.append(button('文件夹',()=>action('open_folder',{id:t.id})));}}
+function renderList(){const query=$('#search').value.trim().toLowerCase();let tasks=snapshot.tasks.filter(t=>view==='queue'?['queued','running'].includes(t.status):view==='error'?t.status==='error':!['queued','running'].includes(t.status));if(view!=='queue')tasks=tasks.slice().reverse();tasks=tasks.filter(t=>(t.title+' '+t.link).toLowerCase().includes(query));const visible=new Set(tasks.map(t=>t.id));for(const [id,row]of rows){if(!visible.has(id)){row.remove();rows.delete(id)}}for(let i=0;i<tasks.length;i++){const t=tasks[i];let row=rows.get(t.id);if(!row){row=makeRow(t);rows.set(t.id,row)}updateRow(row,t);const expected=$('#task-list').children[i];if(expected!==row)$('#task-list').insertBefore(row,expected||null)}$('#empty-state').hidden=tasks.length>0;$('#empty-title').textContent=query?'没有匹配的任务':view==='error'?'目前没有失败任务':view==='history'?'收藏从这里开始':snapshot.tasks.length?'队列已处理完毕':'等待一组好片段';$('#empty-message').textContent=query?'换个关键词试试。':view==='queue'&&snapshot.tasks.length?'在历史中查看结果，或继续添加链接。':'把链接贴在左侧，让收藏慢慢充实。';}
+function render(s){snapshot=s;const pending=s.tasks.filter(t=>['queued','running'].includes(t.status)),done=s.tasks.filter(t=>['done','skipped'].includes(t.status)),failed=s.tasks.filter(t=>t.status==='error'),history=s.tasks.filter(t=>!['queued','running'].includes(t.status)),active=s.tasks.find(t=>t.status==='running');if(hadPending&&!pending.length&&view==='queue')view='history';hadPending=pending.length>0;
+ $('#folder').textContent=s.output;$('#folder').title=s.output;$('#stat-pending').textContent=pending.length;$('#stat-done').textContent=done.length;$('#stat-error').textContent=failed.length;$('#label').textContent=s.paused?'队列已暂停':active?'正在下载':pending.length?'准备处理':'准备就绪';$('#pause').textContent=s.paused?'继续队列':'暂停队列';$('#pause').disabled=!pending.length&&!s.paused;$('#queue-message').textContent=active?(s.paused?'当前任务继续完成，随后暂停。':active.message):s.paused?'任务已保留，点击继续后逐条处理。':pending.length?`还有 ${pending.length} 个任务等待处理。`:s.tasks.length?'所有任务已处理，可在历史中查看。':'粘贴链接，开始建立你的收藏。';$('#queue-message').title=$('#queue-message').textContent;$('#warning').hidden=!s.warning;$('#warning').textContent=s.warning;
+ for(const tab of document.querySelectorAll('[data-view]')){tab.setAttribute('aria-selected',String(view===tab.dataset.view));tab.querySelector('span').textContent=tab.dataset.view==='queue'?pending.length:tab.dataset.view==='history'?history.length:failed.length}
+ $('#retry-all').disabled=!failed.length;$('#export').disabled=!failed.length;$('#cancel-all').disabled=!pending.length;$('#clear-history').disabled=!history.length;
+ if(first){const input=document.querySelector(`input[name=mode][value="${['audio','video','both'].includes(s.mode)?s.mode:'both'}"]`);input.checked=true;first=false}renderList();}
+async function refresh(){if(polling)return;polling=true;try{render(await invoke('get_state'))}catch(e){toast('无法读取任务状态，请重启工具。')}finally{polling=false}}
+$('#form').addEventListener('submit',async e=>{e.preventDefault();if(submitting)return;const text=$('#link').value.trim();if(!text){note('请先粘贴一条或多条抖音链接','invalid');$('#link').focus();return}submitting=true;$('#start').disabled=true;try{const r=await invoke('enqueue',{text,mode:$('input[name=mode]:checked').value});toast(`已添加 ${r.added} 条${r.duplicates?'，跳过 '+r.duplicates+' 条重复':''}${r.ignored?'，忽略 '+r.ignored+' 条不支持的链接':''}${snapshot.paused?'；队列暂停中，可点击继续':''}`);if(r.added){$('#link').value='';view='queue';preview();}await refresh()}catch(e){note(String(e),'invalid')}finally{submitting=false;$('#start').disabled=false}});
+$('#link').addEventListener('input',inputChanged);$('#clear').addEventListener('click',()=>{$('#link').value='';preview();$('#link').focus()});$('#paste').addEventListener('click',async()=>{try{const text=await invoke('read_clipboard');if(!text.trim())return toast('剪贴板中没有文字，请先复制分享链接。');$('#link').value+=($('#link').value.trim()?'\n':'')+text;preview();$('#link').focus()}catch(e){toast(e)}});$('#import').addEventListener('click',async()=>{try{const text=await invoke('import_text');if(text!==null){$('#link').value+=($('#link').value.trim()?'\n':'')+text;preview()}}catch(e){toast(e)}});
+$('#choose').addEventListener('click',()=>action('choose_folder',null,'保存目录只影响之后添加的新任务'));$('#pause').addEventListener('click',()=>action('pause_queue',{paused:!snapshot.paused}));$('#cancel-all').addEventListener('click',()=>action('cancel_task',{id:null},'已取消待处理任务，可在历史中重试'));$('#retry-all').addEventListener('click',()=>action('retry_tasks',{id:null},n=>`已将 ${n} 个失败任务重新加入队列`));$('#clear-history').addEventListener('click',()=>action('clear_history',null,'已清除结束的记录，下载文件保留'));$('#export').addEventListener('click',()=>action('export_failed',null,saved=>saved?'已导出失败链接':'已取消导出'));$('#open').addEventListener('click',()=>action('open_folder',{id:null}));$('#search').addEventListener('input',renderList);document.querySelectorAll('[data-view]').forEach(tab=>tab.addEventListener('click',()=>{view=tab.dataset.view;render(snapshot)}));
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();$('#form').requestSubmit()}if(e.key==='Escape'){const t=snapshot.tasks.find(t=>t.status==='running');if(t){e.preventDefault();action('cancel_task',{id:t.id})}}});refresh();setInterval(refresh,800);
